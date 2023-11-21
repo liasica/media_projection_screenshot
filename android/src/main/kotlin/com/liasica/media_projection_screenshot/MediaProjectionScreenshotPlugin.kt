@@ -1,4 +1,4 @@
-package com.liasica.screenshot
+package com.liasica.media_projection_screenshot
 
 import android.annotation.SuppressLint
 import android.content.res.Resources
@@ -21,21 +21,21 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import java.io.ByteArrayOutputStream
 
-/** ScreenshotPlugin */
-class ScreenshotPlugin : FlutterPlugin, MethodCallHandler {
+/** MediaProjectionScreenshotPlugin */
+class MediaProjectionScreenshotPlugin: FlutterPlugin, MethodCallHandler {
   /// The MethodChannel that will the communication between Flutter and native Android
   ///
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
   /// when the Flutter Engine is detached from the Activity
-  private lateinit var channel: MethodChannel
+  private lateinit var channel : MethodChannel
   private var mediaProjection: MediaProjection? = null
 
   companion object {
-    const val LOG_TAG = "SCREENSHOT"
+    const val LOG_TAG = "MP_SCREENSHOT"
   }
 
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "screenshot")
+    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "media_projection_screenshot")
     channel.setMethodCallHandler(this)
 
     RequestMediaProjectionPermissionManager.getInstance().setRequestPermissionCallback(mediaProjectionCreatorCallback);
@@ -111,25 +111,28 @@ class ScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       val rowPadding = rowStride - pixelStride * width
       val padding = rowPadding / pixelStride
 
-      val bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
+      var bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
       bitmap.copyPixelsFromBuffer(buffer)
 
       image.close()
       virtualDisplay?.release()
 
-      val region = call.arguments as Map<*, *>
-      val x = region["x"] as Int + padding / 2
-      val y = region["y"] as Int
-      val w = region["width"] as Int
-      val h = region["height"] as Int
+      val region = call.arguments as Map<*, *>?
+      region?.let {
+        val x = it["x"] as Int + padding / 2
+        val y = it["y"] as Int
+        val w = it["width"] as Int
+        val h = it["height"] as Int
 
-      val cropped = bitmap.crop(x, y, w, h)
+        bitmap = bitmap.crop(x, y, w, h)
+      }
+
       val outputStream = ByteArrayOutputStream()
-      cropped.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+      bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
 
       val byteArray = outputStream.toByteArray()
-      val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
-      Log.i(LOG_TAG, "base64 = $b64")
+      // val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
+      // Log.i(LOG_TAG, "base64 = $b64")
 
       result.success(byteArray)
     }, 100)

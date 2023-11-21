@@ -1,3 +1,9 @@
+## 0.0.2
+
+* Change class name to `MediaProjectionScreenshot`
+* Add `requestPermission` method
+* `takeCapture` method params are now optional
+
 ## 0.0.1
 
-* TODO: Describe initial release.
+* Release initial version

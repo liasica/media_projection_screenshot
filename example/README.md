@@ -1,6 +1,6 @@
-# screenshot_example
+# media_projection_screenshot_example
 
-Demonstrates how to use the screenshot plugin.
+Demonstrates how to use the media_projection_screenshot plugin.
 
 ## Getting Started
 

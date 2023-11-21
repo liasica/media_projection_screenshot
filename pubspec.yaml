@@ -1,6 +1,6 @@
 name: media_projection_screenshot
 description: Screenshot plugin for Android using MediaProjection API.
-version: 0.0.1
+version: 0.0.2
 homepage: https://github.com/liasica/media_projection_screenshot
 repository: https://github.com/liasica/media_projection_screenshot
 
@@ -11,8 +11,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  media_projection_creator: ^1.0.0
   plugin_platform_interface: ^2.0.2
+  media_projection_creator: ^1.0.0
 
 dev_dependencies:
   flutter_test:
@@ -37,8 +37,8 @@ flutter:
   plugin:
     platforms:
       android:
-        package: com.liasica.screenshot
-        pluginClass: ScreenshotPlugin
+        package: com.liasica.media_projection_screenshot
+        pluginClass: MediaProjectionScreenshotPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

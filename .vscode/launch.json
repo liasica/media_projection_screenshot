@@ -5,18 +5,18 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "screenshot",
+      "name": "media_projection_screenshot",
       "request": "launch",
       "type": "dart"
     },
     {
-      "name": "screenshot (profile mode)",
+      "name": "media_projection_screenshot (profile mode)",
       "request": "launch",
       "type": "dart",
       "flutterMode": "profile"
     },
     {
-      "name": "screenshot (release mode)",
+      "name": "media_projection_screenshot (release mode)",
       "request": "launch",
       "type": "dart",
       "flutterMode": "release"

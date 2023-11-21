@@ -1,4 +1,4 @@
-package com.liasica.screenshot_example
+package com.liasica.media_projection_screenshot_example
 
 import io.flutter.embedding.android.FlutterActivity
 
