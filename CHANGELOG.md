@@ -1,3 +1,7 @@
+## 0.0.4
+
+* Return image properties
+
 ## 0.0.3
 
 * Change `requestPermission` value from `int?` to `int`

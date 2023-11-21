@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:media_projection_screenshot/captured_image.dart';
 import 'package:media_projection_screenshot/media_projection_screenshot.dart';
 
 void main() {
@@ -16,7 +16,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   final _screenshotPlugin = MediaProjectionScreenshot();
 
-  Uint8List? bytes;
+  CapturedImage? image;
 
   @override
   void initState() {
@@ -36,19 +36,20 @@ class _MyAppState extends State<MyApp> {
               MaterialButton(
                 child: const Text('Take Capture'),
                 onPressed: () async {
-                  Uint8List? result = await _screenshotPlugin.takeCapture();
+                  CapturedImage? result = await _screenshotPlugin.takeCapture(x: 0, y: 100, width: 800, height: 600);
+                  print(result.toString());
                   setState(() {
-                    bytes = result;
+                    image = result;
                   });
                 },
               ),
-              bytes != null
+              image != null
                   ? Container(
                       padding: const EdgeInsets.all(6),
                       color: Colors.blueAccent,
                       height: 600,
                       child: Image.memory(
-                        bytes!,
+                        image!.bytes,
                         width: double.infinity,
                         fit: BoxFit.contain,
                       ),

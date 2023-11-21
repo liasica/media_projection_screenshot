@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:media_projection_screenshot/captured_image.dart';
 
 import 'media_projection_screenshot_platform_interface.dart';
 
@@ -10,7 +11,7 @@ class MethodChannelMediaProjectionScreenshot extends MediaProjectionScreenshotPl
   final methodChannel = const MethodChannel('media_projection_screenshot');
 
   @override
-  Future<Uint8List?> takeCapture({int? x, int? y, int? width, int? height}) async {
+  Future<CapturedImage?> takeCapture({int? x, int? y, int? width, int? height}) async {
     Map<String, dynamic>? data;
     if (x != null && y != null && width != null && height != null) {
       data = {
@@ -20,6 +21,10 @@ class MethodChannelMediaProjectionScreenshot extends MediaProjectionScreenshotPl
         'height': height,
       };
     }
-    return await methodChannel.invokeMethod<Uint8List?>('takeCapture', data);
+    final result = await methodChannel.invokeMethod('takeCapture', data);
+    if (result == null) {
+      return null;
+    }
+    return CapturedImage.fromMap(Map<String, dynamic>.from(result));
   }
 }

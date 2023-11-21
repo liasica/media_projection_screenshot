@@ -1,5 +1,4 @@
-import 'dart:typed_data';
-
+import 'package:media_projection_screenshot/captured_image.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'media_projection_screenshot_method_channel.dart';
@@ -25,7 +24,7 @@ abstract class MediaProjectionScreenshotPlatform extends PlatformInterface {
     _instance = instance;
   }
 
-  Future<Uint8List?> takeCapture({int? x, int? y, int? width, int? height}) {
+  Future<CapturedImage?> takeCapture({int? x, int? y, int? width, int? height}) {
     throw UnimplementedError('takeCapture() has not been implemented.');
   }
 }

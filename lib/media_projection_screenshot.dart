@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:media_projection_creator/media_projection_creator.dart';
+import 'package:media_projection_screenshot/captured_image.dart';
 
 import 'media_projection_screenshot_platform_interface.dart';
 
@@ -26,14 +25,14 @@ class MediaProjectionScreenshot {
   }
 
   /// take capture
-  /// return captured image [Uint8List]
+  /// return captured image [CapturedImage]
   /// x: capture from [int] x
   /// y: capture to [int] y
   /// width: capture width pixels [int]
   /// height: capture size height pixels [int]
   /// if x, y, width, height are booth null, capture full screen
   /// if x, y, width, height are booth not null, capture specified area
-  Future<Uint8List?> takeCapture({int? x, int? y, int? width, int? height}) async {
+  Future<CapturedImage?> takeCapture({int? x, int? y, int? width, int? height}) async {
     await requestPermission();
     if (!isGranted) {
       return null;

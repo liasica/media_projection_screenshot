@@ -10,7 +10,6 @@ import android.media.projection.MediaProjection
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Base64
 import im.zego.media_projection_creator.MediaProjectionCreatorCallback
 import im.zego.media_projection_creator.RequestMediaProjectionPermissionManager
 import io.flutter.Log
@@ -22,12 +21,12 @@ import io.flutter.plugin.common.MethodChannel.Result
 import java.io.ByteArrayOutputStream
 
 /** MediaProjectionScreenshotPlugin */
-class MediaProjectionScreenshotPlugin: FlutterPlugin, MethodCallHandler {
+class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
   /// The MethodChannel that will the communication between Flutter and native Android
   ///
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
   /// when the Flutter Engine is detached from the Activity
-  private lateinit var channel : MethodChannel
+  private lateinit var channel: MethodChannel
   private var mediaProjection: MediaProjection? = null
 
   companion object {
@@ -134,7 +133,17 @@ class MediaProjectionScreenshotPlugin: FlutterPlugin, MethodCallHandler {
       // val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
       // Log.i(LOG_TAG, "base64 = $b64")
 
-      result.success(byteArray)
+      result.success(
+        mapOf(
+          "bytes" to byteArray,
+          "width" to bitmap.width,
+          "height" to bitmap.height,
+          "rowBytes" to bitmap.rowBytes,
+          "format" to Bitmap.Config.ARGB_8888.toString(),
+          "pixelStride" to pixelStride,
+          "rowStride" to rowStride,
+        )
+      )
     }, 100)
   }
 
