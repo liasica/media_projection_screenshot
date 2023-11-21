@@ -10,11 +10,11 @@ class MediaProjectionScreenshot {
   static bool get isGranted => _isGranted;
 
   /// request permission
-  /// return errorCode
+  /// return [int] errorCode
   /// 0: succeed
   /// 1: user canceled
   /// 2: system version too low
-  Future<int?> requestPermission() async {
+  Future<int> requestPermission() async {
     if (!isGranted) {
       int errorCode = await MediaProjectionCreator.createMediaProjection();
       if (errorCode == MediaProjectionCreator.ERROR_CODE_SUCCEED) {
@@ -22,7 +22,7 @@ class MediaProjectionScreenshot {
       }
       return errorCode;
     }
-    return null;
+    return 0;
   }
 
   /// take capture

@@ -1,3 +1,7 @@
+## 0.0.3
+
+* Change `requestPermission` value from `int?` to `int`
+
 ## 0.0.2
 
 * Change class name to `MediaProjectionScreenshot`
