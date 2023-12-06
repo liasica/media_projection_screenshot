@@ -39,4 +39,12 @@ class MediaProjectionScreenshot {
     }
     return await MediaProjectionScreenshotPlatform.instance.takeCapture(x: x, y: y, width: width, height: height);
   }
+
+  Future<void> startCapture() async {
+    await MediaProjectionScreenshotPlatform.instance.startCapture();
+  }
+
+  Future<void> stopCapture() async {
+    await MediaProjectionScreenshotPlatform.instance.stopCapture();
+  }
 }

@@ -27,4 +27,14 @@ class MethodChannelMediaProjectionScreenshot extends MediaProjectionScreenshotPl
     }
     return CapturedImage.fromMap(Map<String, dynamic>.from(result));
   }
+
+  @override
+  Future<void> startCapture() async {
+    await methodChannel.invokeMethod('startCapture');
+  }
+
+  @override
+  Future<void> stopCapture() async {
+    await methodChannel.invokeMethod('stopCapture');
+  }
 }

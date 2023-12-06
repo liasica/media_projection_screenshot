@@ -1,3 +1,7 @@
+## 0.0.5
+
+* Return image nv21 format buffer and base64 string
+
 ## 0.0.4
 
 * Return image properties

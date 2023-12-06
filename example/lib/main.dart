@@ -34,6 +34,12 @@ class _MyAppState extends State<MyApp> {
           child: Column(
             children: [
               MaterialButton(
+                child: const Text('Request Permission'),
+                onPressed: () async {
+                  _screenshotPlugin.requestPermission();
+                },
+              ),
+              MaterialButton(
                 child: const Text('Take Capture'),
                 onPressed: () async {
                   CapturedImage? result = await _screenshotPlugin.takeCapture(x: 0, y: 100, width: 800, height: 600);
@@ -41,6 +47,18 @@ class _MyAppState extends State<MyApp> {
                   setState(() {
                     image = result;
                   });
+                },
+              ),
+              MaterialButton(
+                child: const Text('Start Capture'),
+                onPressed: () async {
+                  await _screenshotPlugin.startCapture();
+                },
+              ),
+              MaterialButton(
+                child: const Text('Stop Capture'),
+                onPressed: () async {
+                  await _screenshotPlugin.stopCapture();
                 },
               ),
               image != null
