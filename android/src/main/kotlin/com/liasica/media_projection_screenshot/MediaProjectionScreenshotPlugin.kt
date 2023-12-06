@@ -24,6 +24,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 
 /** MediaProjectionScreenshotPlugin */
@@ -42,7 +43,8 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
   private var mImageReader: ImageReader? = null
 
   private var isLiving: AtomicBoolean = AtomicBoolean(false)
-  private var isProcessing: AtomicBoolean = AtomicBoolean(false)
+  private var processingTime = AtomicLong(System.currentTimeMillis())
+  private var counting = AtomicLong(0)
 
   companion object {
     const val LOG_TAG = "MP_SCREENSHOT"
@@ -50,6 +52,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
     const val CAPTURE_CONTINUOUS = "MP_CAPTURE_CONTINUOUS"
     const val METHOD_CHANNEL_NAME = "media_projection_screenshot"
     const val EVENT_CHANNEL_NAME = "media_projection_screenshot/event"
+    const val FPS = 15
   }
 
   @RequiresApi(Build.VERSION_CODES.O)
@@ -61,7 +64,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
 
     context = flutterPluginBinding.applicationContext
 
-    RequestMediaProjectionPermissionManager.getInstance().setRequestPermissionCallback(mediaProjectionCreatorCallback);
+    RequestMediaProjectionPermissionManager.getInstance().setRequestPermissionCallback(mediaProjectionCreatorCallback)
   }
 
   @RequiresApi(Build.VERSION_CODES.O)
@@ -76,7 +79,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
       }
 
       "stopCapture" -> {
-        stopCapture(call, result)
+        stopCapture(result)
       }
 
       else -> result.notImplemented()
@@ -111,9 +114,10 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
     }
   }
 
-  private fun stopCapture(call: MethodCall, result: Result) {
+  private fun stopCapture(result: Result) {
     if (!isLiving.compareAndSet(true, false)) {
-      result.error(LOG_TAG, "Screen capture is not start", null)
+      Log.i(LOG_TAG, "Screen capture is not start")
+      result.success(true)
       return
     }
 
@@ -123,6 +127,9 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
     mImageReader?.surface?.release()
     mImageReader?.close()
     mImageReader = null
+
+    Log.i(LOG_TAG, "Screen capture stopped")
+    result.success(true)
   }
 
   @SuppressLint("WrongConstant")
@@ -162,13 +169,15 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
       null,
     )
 
-    Log.i(LOG_TAG, "Screen capture started")
+    val region = call.arguments as Map<*, *>?
+    val fps = region?.let {
+      region["fps"] as Int?
+    } ?: FPS
+    Log.i(LOG_TAG, "Screen capture started: FPS = $fps")
 
-    var n = 0
-    mImageReader!!.setOnImageAvailableListener({
-      val image = it.acquireLatestImage() ?: return@setOnImageAvailableListener
+    mImageReader!!.setOnImageAvailableListener({ reader ->
+      val image = reader.acquireLatestImage()
       val start = System.currentTimeMillis()
-      n += 1
 
       val planes = image.planes
       val buffer = planes[0].buffer
@@ -177,30 +186,41 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
       val rowPadding = rowStride - pixelStride * width
       val padding = rowPadding / pixelStride
 
-      val bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
+      var bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
       bitmap.copyPixelsFromBuffer(buffer)
 
       image.close()
 
-      val outputStream = ByteArrayOutputStream()
-      // bitmap.compress(Bitmap.CompressFormat.PNG, 80, outputStream)
+      // 控制速率
+      if (fps == 0 || System.currentTimeMillis() - processingTime.get() >= 1000 / fps) {
+        processingTime.set(System.currentTimeMillis())
+        region?.let { params ->
+          val x = params["x"] as Int?
+          val y = params["y"] as Int?
+          val w = params["width"] as Int?
+          val h = params["height"] as Int?
+          if (x != null && y != null && w != null && h != null) {
+            bitmap = bitmap.crop(x + padding / 2, y, w, h)
+          }
+        }
 
-      // val byteArray = outputStream.toByteArray()
-      // val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
 
-      val ts = System.currentTimeMillis() - start
-      Log.i(LOG_TAG, "n = \t$n, ts = $ts\t, outputStream = ${outputStream.size()}")
+        // val byteArray = outputStream.toByteArray()
+        // val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
+
+        // val file = File("${context.cacheDir.absolutePath}/${System.currentTimeMillis()}.jpeg")
+        // val fOut = file.outputStream()
+        // bitmap.compress(Bitmap.CompressFormat.JPEG, 100, fOut)
+        // fOut.flush()
+        // fOut.close()
+
+        val ts = System.currentTimeMillis() - start
+        Log.i(LOG_TAG, "n = \t${counting.addAndGet(1)}, ts = $ts\t, outputStream.size = ${outputStream.size()}")
+      }
     }, null)
-
-    // val thread = Thread {
-    //   run {
-    //     while (isLiving.get()) {
-    //     }
-    //   }
-    // }
-    // thread.start()
   }
-
 
   @SuppressLint("WrongConstant")
   private fun takeCapture(call: MethodCall, result: Result) {
@@ -298,7 +318,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
     var yIndex = 0
     var uIndex = frameSize
     var vIndex = frameSize + frameSize / 4
-    var a: Int
+    // var a: Int
     var r: Int
     var g: Int
     var b: Int
@@ -308,7 +328,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
     var index = 0
     for (j in 0 until height) {
       for (i in 0 until width) {
-        a = argb[index] and -0x1000000 shr 24 // a is not used obviously
+        // a = argb[index] and -0x1000000 shr 24 // a is not used obviously
         r = argb[index] and 0xff0000 shr 16
         g = argb[index] and 0xff00 shr 8
         b = argb[index] and 0xff shr 0
@@ -321,10 +341,10 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
         // YV12 has a plane of Y and two chroma plans (U, V) planes each sampled by a factor of 2
         //    meaning for every 4 Y pixels there are 1 V and 1 U.  Note the sampling is every other
         //    pixel AND every other scanline.
-        yuv420sp[yIndex++] = (if (y < 0) 0 else if (y > 255) 255 else y).toByte()
+        yuv420sp[yIndex++] = y.toByte()
         if (j % 2 == 0 && index % 2 == 0) {
-          yuv420sp[uIndex++] = (if (v < 0) 0 else if (v > 255) 255 else v).toByte()
-          yuv420sp[vIndex++] = (if (u < 0) 0 else if (u > 255) 255 else u).toByte()
+          yuv420sp[uIndex++] = v.toByte()
+          yuv420sp[vIndex++] = u.toByte()
         }
         index++
       }
