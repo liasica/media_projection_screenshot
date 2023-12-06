@@ -1,6 +1,7 @@
 package com.liasica.media_projection_screenshot
 
 import android.annotation.SuppressLint
+import android.content.Context
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
@@ -12,10 +13,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.media.projection.MediaProjection
 import android.os.Build
-import android.os.Handler
-import android.os.HandlerThread
-import android.os.Looper
-import android.os.Message
+import android.os.Bundle
 import android.util.Base64
 import android.view.Surface
 import androidx.annotation.RequiresApi
@@ -28,6 +26,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import java.io.ByteArrayOutputStream
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 /** MediaProjectionScreenshotPlugin */
@@ -37,14 +36,14 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
   /// when the Flutter Engine is detached from the Activity
   private lateinit var channel: MethodChannel
+  private lateinit var context: Context
+
   private var mediaProjection: MediaProjection? = null
 
   private var virtualDisplay: VirtualDisplay? = null
   private var surface: Surface? = null
-  private var isCapturing: Boolean = false
+  private var isLiving: AtomicBoolean = AtomicBoolean(false)
   private var codec: MediaCodec? = null
-  private var handlerThread: HandlerThread? = null
-  private var handler: Handler? = null
 
   companion object {
     const val LOG_TAG = "MP_SCREENSHOT"
@@ -57,6 +56,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
     channel = MethodChannel(flutterPluginBinding.binaryMessenger, "media_projection_screenshot")
     channel.setMethodCallHandler(this)
+    context = flutterPluginBinding.applicationContext
 
     RequestMediaProjectionPermissionManager.getInstance().setRequestPermissionCallback(mediaProjectionCreatorCallback);
   }
@@ -67,9 +67,11 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       "takeCapture" -> {
         takeCapture(call, result)
       }
+
       "startCapture" -> {
         startCapture(call, result)
       }
+
       "stopCapture" -> {
         stopCapture(call, result)
       }
@@ -100,12 +102,10 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
   }
 
   private fun stopCapture(call: MethodCall, result: Result) {
-    if (!isCapturing) {
+    if (!isLiving.compareAndSet(true, false)) {
       result.error(LOG_TAG, "Screen capture is not start", null)
       return
     }
-
-    isCapturing = false
 
     virtualDisplay?.release()
     virtualDisplay = null
@@ -115,11 +115,6 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
 
     codec?.release()
     codec = null
-
-    handlerThread?.quit()
-    handlerThread = null
-
-    handler = null
   }
 
   @RequiresApi(Build.VERSION_CODES.O)
@@ -134,12 +129,10 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       return
     }
 
-    if (isCapturing) {
+    if (!isLiving.compareAndSet(false, true)) {
       result.error(LOG_TAG, "Screen capture has started", null)
       return
     }
-
-    isCapturing = true
 
     val metrics = Resources.getSystem().displayMetrics
     val width = metrics.widthPixels
@@ -159,11 +152,6 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
 
     surface = codec!!.createInputSurface()
 
-    handlerThread = HandlerThread(CAPTURE_CONSEQUENT_HANDLER_THREAD)
-    handlerThread!!.start()
-
-    handler = Handler(handlerThread!!.looper)
-
     virtualDisplay = mediaProjection?.createVirtualDisplay(
       CAPTURE_CONSEQUENT,
       width,
@@ -172,12 +160,47 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
       surface,
       null,
-      handler,
+      null,
     )
 
     codec!!.start()
     Log.i(LOG_TAG, "Screen capture started")
+
+    var n = 0
+    val bufferInfo = MediaCodec.BufferInfo()
+    var timeStamp: Long = 0
+    val h264 = ByteArray(width * height * 3)
+
+    val thread = Thread {
+      run {
+        while (isLiving.get()) {
+          // 若时间差大于 2 s，则通知编码器，生成 I 帧
+          if (System.currentTimeMillis() - timeStamp >= 2000) {
+            // Bundle 通知 Dsp
+            val msgBundle = Bundle()
+            msgBundle.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
+            codec!!.setParameters(msgBundle)
+            timeStamp = System.currentTimeMillis()
+          }
+
+          n += 1
+
+          // val outputBufferIndex = codec!!.dequeueOutputBuffer(bufferInfo, 100000)
+          // var size = 0
+          // if (outputBufferIndex >= 0) {
+          //   val byteBuffer = codec!!.getOutputBuffer(outputBufferIndex)
+          //   val outData = ByteArray(bufferInfo.size)
+          //   val data = byteBuffer!![outData]
+          //   size = data.remaining()
+          // }
+          // Log.i(LOG_TAG, "第\t$n 次输出图片, outputBufferIndex = $outputBufferIndex\t, byteBuffer = $size")
+          // Thread.sleep(5000)
+        }
+      }
+    }
+    thread.start()
   }
+
 
   @SuppressLint("WrongConstant")
   private fun takeCapture(call: MethodCall, result: Result) {
@@ -195,7 +218,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
     val width = metrics.widthPixels
     val height = metrics.heightPixels
 
-    val imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 1)
+    val imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 5)
 
     val mVirtualDisplay = mediaProjection?.createVirtualDisplay(
       CAPTURE_SINGLE,
@@ -208,8 +231,14 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       null,
     )
 
-    Handler(Looper.getMainLooper()).postDelayed({
-      val image = imageReader.acquireLatestImage() ?: return@postDelayed
+    val dir = context.externalCacheDir?.absolutePath
+    Log.i(LOG_TAG, "Directory is: $dir")
+
+    var n = 0
+    imageReader.setOnImageAvailableListener({
+      val image = it.acquireLatestImage() ?: return@setOnImageAvailableListener
+
+      n += 1
 
       val planes = image.planes
       val buffer = planes[0].buffer
@@ -218,43 +247,67 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       val rowPadding = rowStride - pixelStride * width
       val padding = rowPadding / pixelStride
 
-      var bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
+      val bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
       bitmap.copyPixelsFromBuffer(buffer)
 
       image.close()
-      mVirtualDisplay?.release()
-
-      val region = call.arguments as Map<*, *>?
-      region?.let {
-        val x = it["x"] as Int + padding / 2
-        val y = it["y"] as Int
-        val w = it["width"] as Int
-        val h = it["height"] as Int
-
-        bitmap = bitmap.crop(x, y, w, h)
-      }
 
       val outputStream = ByteArrayOutputStream()
       bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
 
       val byteArray = outputStream.toByteArray()
       val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
-      // Log.i(LOG_TAG, "base64 = $b64")
 
-      result.success(
-        mapOf(
-          "bytes" to byteArray,
-          "width" to bitmap.width,
-          "height" to bitmap.height,
-          "rowBytes" to bitmap.rowBytes,
-          "format" to Bitmap.Config.ARGB_8888.toString(),
-          "pixelStride" to pixelStride,
-          "rowStride" to rowStride,
-          "nv21" to getYV12(bitmap.width, bitmap.height, bitmap),
-          "base64" to b64,
-        )
-      )
-    }, 100)
+      Log.i(LOG_TAG, "n = \t$n, b64 = $b64")
+    }, null)
+
+    // Handler(Looper.getMainLooper()).postDelayed({
+    //   val image = imageReader.acquireLatestImage() ?: return@postDelayed
+    //
+    //   val planes = image.planes
+    //   val buffer = planes[0].buffer
+    //   val pixelStride = planes[0].pixelStride
+    //   val rowStride = planes[0].rowStride
+    //   val rowPadding = rowStride - pixelStride * width
+    //   val padding = rowPadding / pixelStride
+    //
+    //   var bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
+    //   bitmap.copyPixelsFromBuffer(buffer)
+    //
+    //   image.close()
+    //   mVirtualDisplay?.release()
+    //
+    //   val region = call.arguments as Map<*, *>?
+    //   region?.let {
+    //     val x = it["x"] as Int + padding / 2
+    //     val y = it["y"] as Int
+    //     val w = it["width"] as Int
+    //     val h = it["height"] as Int
+    //
+    //     bitmap = bitmap.crop(x, y, w, h)
+    //   }
+    //
+    //   val outputStream = ByteArrayOutputStream()
+    //   bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+    //
+    //   val byteArray = outputStream.toByteArray()
+    //   val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
+    //   // Log.i(LOG_TAG, "base64 = $b64")
+    //
+    //   result.success(
+    //     mapOf(
+    //       "bytes" to byteArray,
+    //       "width" to bitmap.width,
+    //       "height" to bitmap.height,
+    //       "rowBytes" to bitmap.rowBytes,
+    //       "format" to Bitmap.Config.ARGB_8888.toString(),
+    //       "pixelStride" to pixelStride,
+    //       "rowStride" to rowStride,
+    //       "nv21" to getYV12(bitmap.width, bitmap.height, bitmap),
+    //       "base64" to b64,
+    //     )
+    //   )
+    // }, 100)
   }
 
   private fun Bitmap.crop(x: Int, y: Int, width: Int, height: Int): Bitmap {
