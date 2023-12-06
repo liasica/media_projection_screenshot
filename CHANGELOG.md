@@ -1,6 +1,6 @@
 ## 0.0.5
 
-* Return image nv21 format buffer and base64 string
+* Return image nv21 format buffer
 
 ## 0.0.4
 

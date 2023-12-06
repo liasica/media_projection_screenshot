@@ -8,14 +8,10 @@ import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
-import android.media.MediaCodec
-import android.media.MediaCodecInfo
-import android.media.MediaFormat
 import android.media.projection.MediaProjection
 import android.os.Build
-import android.os.Bundle
-import android.util.Base64
-import android.view.Surface
+import android.os.Handler
+import android.os.Looper
 import androidx.annotation.RequiresApi
 import im.zego.media_projection_creator.MediaProjectionCreatorCallback
 import im.zego.media_projection_creator.RequestMediaProjectionPermissionManager
@@ -40,16 +36,16 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
 
   private var mediaProjection: MediaProjection? = null
 
-  private var virtualDisplay: VirtualDisplay? = null
-  private var surface: Surface? = null
+  private var mVirtualDisplay: VirtualDisplay? = null
+  private var mImageReader: ImageReader? = null
+
   private var isLiving: AtomicBoolean = AtomicBoolean(false)
-  private var codec: MediaCodec? = null
+  private var isProcessing: AtomicBoolean = AtomicBoolean(false)
 
   companion object {
     const val LOG_TAG = "MP_SCREENSHOT"
     const val CAPTURE_SINGLE = "MP_CAPTURE_SINGLE"
-    const val CAPTURE_CONSEQUENT = "MP_CAPTURE_CONSEQUENT"
-    const val CAPTURE_CONSEQUENT_HANDLER_THREAD = "MP_CAPTURE_CONSEQUENT_HANDLER_THREAD"
+    const val CAPTURE_CONTINUOUS = "MP_CAPTURE_CONTINUOUS"
   }
 
   @RequiresApi(Build.VERSION_CODES.O)
@@ -107,16 +103,15 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       return
     }
 
-    virtualDisplay?.release()
-    virtualDisplay = null
+    mVirtualDisplay?.release()
+    mVirtualDisplay = null
 
-    surface?.release()
-    surface = null
-
-    codec?.release()
-    codec = null
+    mImageReader?.surface?.release()
+    mImageReader?.close()
+    mImageReader = null
   }
 
+  @SuppressLint("WrongConstant")
   @RequiresApi(Build.VERSION_CODES.O)
   private fun startCapture(call: MethodCall, result: Result) {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
@@ -138,67 +133,58 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
     val width = metrics.widthPixels
     val height = metrics.heightPixels
 
-    // 配置 MediaCodec
-    val mediaFormat = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height)
-    // 颜色格式
-    mediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-    mediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, 400_000)
-    mediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, 15)
-    // 设置触发关键帧的时间间隔为 2 s
-    mediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 2)
+    if (mImageReader == null) {
+      mImageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 5)
+    }
 
-    codec = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC)
-    codec!!.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-
-    surface = codec!!.createInputSurface()
-
-    virtualDisplay = mediaProjection?.createVirtualDisplay(
-      CAPTURE_CONSEQUENT,
+    mVirtualDisplay = mediaProjection?.createVirtualDisplay(
+      CAPTURE_CONTINUOUS,
       width,
       height,
       1,
       DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
-      surface,
+      mImageReader!!.surface,
       null,
       null,
     )
 
-    codec!!.start()
     Log.i(LOG_TAG, "Screen capture started")
 
     var n = 0
-    val bufferInfo = MediaCodec.BufferInfo()
-    var timeStamp: Long = 0
-    val h264 = ByteArray(width * height * 3)
+    mImageReader!!.setOnImageAvailableListener({
+      val image = it.acquireLatestImage() ?: return@setOnImageAvailableListener
+      val start = System.currentTimeMillis()
+      n += 1
 
-    val thread = Thread {
-      run {
-        while (isLiving.get()) {
-          // 若时间差大于 2 s，则通知编码器，生成 I 帧
-          if (System.currentTimeMillis() - timeStamp >= 2000) {
-            // Bundle 通知 Dsp
-            val msgBundle = Bundle()
-            msgBundle.putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0)
-            codec!!.setParameters(msgBundle)
-            timeStamp = System.currentTimeMillis()
-          }
+      val planes = image.planes
+      val buffer = planes[0].buffer
+      val pixelStride = planes[0].pixelStride
+      val rowStride = planes[0].rowStride
+      val rowPadding = rowStride - pixelStride * width
+      val padding = rowPadding / pixelStride
 
-          n += 1
+      val bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
+      bitmap.copyPixelsFromBuffer(buffer)
 
-          // val outputBufferIndex = codec!!.dequeueOutputBuffer(bufferInfo, 100000)
-          // var size = 0
-          // if (outputBufferIndex >= 0) {
-          //   val byteBuffer = codec!!.getOutputBuffer(outputBufferIndex)
-          //   val outData = ByteArray(bufferInfo.size)
-          //   val data = byteBuffer!![outData]
-          //   size = data.remaining()
-          // }
-          // Log.i(LOG_TAG, "第\t$n 次输出图片, outputBufferIndex = $outputBufferIndex\t, byteBuffer = $size")
-          // Thread.sleep(5000)
-        }
-      }
-    }
-    thread.start()
+      image.close()
+
+      val outputStream = ByteArrayOutputStream()
+      // bitmap.compress(Bitmap.CompressFormat.PNG, 80, outputStream)
+
+      // val byteArray = outputStream.toByteArray()
+      // val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
+
+      val ts = System.currentTimeMillis() - start
+      Log.i(LOG_TAG, "n = \t$n, ts = $ts\t, outputStream = ${outputStream.size()}")
+    }, null)
+
+    // val thread = Thread {
+    //   run {
+    //     while (isLiving.get()) {
+    //     }
+    //   }
+    // }
+    // thread.start()
   }
 
 
@@ -220,7 +206,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
 
     val imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 5)
 
-    val mVirtualDisplay = mediaProjection?.createVirtualDisplay(
+    mediaProjection?.createVirtualDisplay(
       CAPTURE_SINGLE,
       width,
       height,
@@ -231,14 +217,8 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       null,
     )
 
-    val dir = context.externalCacheDir?.absolutePath
-    Log.i(LOG_TAG, "Directory is: $dir")
-
-    var n = 0
-    imageReader.setOnImageAvailableListener({
-      val image = it.acquireLatestImage() ?: return@setOnImageAvailableListener
-
-      n += 1
+    Handler(Looper.getMainLooper()).postDelayed({
+      val image = imageReader.acquireLatestImage() ?: return@postDelayed
 
       val planes = image.planes
       val buffer = planes[0].buffer
@@ -247,67 +227,43 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
       val rowPadding = rowStride - pixelStride * width
       val padding = rowPadding / pixelStride
 
-      val bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
+      var bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
       bitmap.copyPixelsFromBuffer(buffer)
 
       image.close()
+      mVirtualDisplay?.release()
+
+      val region = call.arguments as Map<*, *>?
+      region?.let {
+        val x = it["x"] as Int + padding / 2
+        val y = it["y"] as Int
+        val w = it["width"] as Int
+        val h = it["height"] as Int
+
+        bitmap = bitmap.crop(x, y, w, h)
+      }
 
       val outputStream = ByteArrayOutputStream()
       bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
 
       val byteArray = outputStream.toByteArray()
-      val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
+      // val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
+      // Log.i(LOG_TAG, "base64 = $b64")
 
-      Log.i(LOG_TAG, "n = \t$n, b64 = $b64")
-    }, null)
-
-    // Handler(Looper.getMainLooper()).postDelayed({
-    //   val image = imageReader.acquireLatestImage() ?: return@postDelayed
-    //
-    //   val planes = image.planes
-    //   val buffer = planes[0].buffer
-    //   val pixelStride = planes[0].pixelStride
-    //   val rowStride = planes[0].rowStride
-    //   val rowPadding = rowStride - pixelStride * width
-    //   val padding = rowPadding / pixelStride
-    //
-    //   var bitmap = Bitmap.createBitmap(width + padding, height, Bitmap.Config.ARGB_8888)
-    //   bitmap.copyPixelsFromBuffer(buffer)
-    //
-    //   image.close()
-    //   mVirtualDisplay?.release()
-    //
-    //   val region = call.arguments as Map<*, *>?
-    //   region?.let {
-    //     val x = it["x"] as Int + padding / 2
-    //     val y = it["y"] as Int
-    //     val w = it["width"] as Int
-    //     val h = it["height"] as Int
-    //
-    //     bitmap = bitmap.crop(x, y, w, h)
-    //   }
-    //
-    //   val outputStream = ByteArrayOutputStream()
-    //   bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-    //
-    //   val byteArray = outputStream.toByteArray()
-    //   val b64 = "data:image/png;base64," + Base64.encodeToString(byteArray, Base64.NO_WRAP)
-    //   // Log.i(LOG_TAG, "base64 = $b64")
-    //
-    //   result.success(
-    //     mapOf(
-    //       "bytes" to byteArray,
-    //       "width" to bitmap.width,
-    //       "height" to bitmap.height,
-    //       "rowBytes" to bitmap.rowBytes,
-    //       "format" to Bitmap.Config.ARGB_8888.toString(),
-    //       "pixelStride" to pixelStride,
-    //       "rowStride" to rowStride,
-    //       "nv21" to getYV12(bitmap.width, bitmap.height, bitmap),
-    //       "base64" to b64,
-    //     )
-    //   )
-    // }, 100)
+      result.success(
+        mapOf(
+          "bytes" to byteArray,
+          "width" to bitmap.width,
+          "height" to bitmap.height,
+          "rowBytes" to bitmap.rowBytes,
+          "format" to Bitmap.Config.ARGB_8888.toString(),
+          "pixelStride" to pixelStride,
+          "rowStride" to rowStride,
+          "nv21" to getYV12(bitmap.width, bitmap.height, bitmap),
+          // "base64" to b64,
+        )
+      )
+    }, 100)
   }
 
   private fun Bitmap.crop(x: Int, y: Int, width: Int, height: Int): Bitmap {
