@@ -17,6 +17,7 @@ import im.zego.media_projection_creator.MediaProjectionCreatorCallback
 import im.zego.media_projection_creator.RequestMediaProjectionPermissionManager
 import io.flutter.Log
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -26,13 +27,14 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 
 /** MediaProjectionScreenshotPlugin */
-class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
+class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
   /// The MethodChannel that will the communication between Flutter and native Android
   ///
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
   /// when the Flutter Engine is detached from the Activity
-  private lateinit var channel: MethodChannel
+  private lateinit var methodChannel: MethodChannel
   private lateinit var context: Context
+  private var events: EventChannel.EventSink? = null
 
   private var mediaProjection: MediaProjection? = null
 
@@ -46,12 +48,17 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
     const val LOG_TAG = "MP_SCREENSHOT"
     const val CAPTURE_SINGLE = "MP_CAPTURE_SINGLE"
     const val CAPTURE_CONTINUOUS = "MP_CAPTURE_CONTINUOUS"
+    const val METHOD_CHANNEL_NAME = "media_projection_screenshot"
+    const val EVENT_CHANNEL_NAME = "media_projection_screenshot/event"
   }
 
   @RequiresApi(Build.VERSION_CODES.O)
   override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
-    channel = MethodChannel(flutterPluginBinding.binaryMessenger, "media_projection_screenshot")
-    channel.setMethodCallHandler(this)
+    methodChannel = MethodChannel(flutterPluginBinding.binaryMessenger, METHOD_CHANNEL_NAME)
+    methodChannel.setMethodCallHandler(this)
+
+    EventChannel(flutterPluginBinding.binaryMessenger, EVENT_CHANNEL_NAME).setStreamHandler(this)
+
     context = flutterPluginBinding.applicationContext
 
     RequestMediaProjectionPermissionManager.getInstance().setRequestPermissionCallback(mediaProjectionCreatorCallback);
@@ -77,8 +84,15 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler {
   }
 
   override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-    channel.setMethodCallHandler(null)
+    methodChannel.setMethodCallHandler(null)
   }
+
+
+  override fun onListen(arguments: Any?, es: EventChannel.EventSink?) {
+    events = es
+  }
+
+  override fun onCancel(arguments: Any?) {}
 
   private val mediaProjectionCreatorCallback = MediaProjectionCreatorCallback { projection, errorCode ->
     when (errorCode) {
