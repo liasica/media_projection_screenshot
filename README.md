@@ -11,7 +11,7 @@ final _screenshotPlugin = MediaProjectionScreenshot();
 final result = await _screenshotPlugin.takeCapture(x: 0, y: 0, width: 1080, height: 100);
 ```
 
-### refers
+### Refers
 
 - [Android 音视频开发——录屏直播](https://blog.51cto.com/u_15375308/3997338)
 - [1对1直播源码开发，Android获取实时屏幕画面](https://cloud.tencent.com/developer/article/1837042)

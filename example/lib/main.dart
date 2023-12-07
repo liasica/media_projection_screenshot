@@ -56,6 +56,7 @@ class _MyAppState extends State<MyApp> {
                   stream?.listen((result) {
                     setState(() {
                       image = CapturedImage.fromMap(Map<String, dynamic>.from(result));
+                      print(image.toString());
                     });
                   });
                 },

@@ -217,6 +217,7 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
         // fOut.close()
 
         val byteArray = outputStream.toByteArray()
+        val queue = counting.addAndGet(1)
         events?.success(
           mapOf(
             "bytes" to byteArray,
@@ -227,11 +228,13 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
             "pixelStride" to pixelStride,
             "rowStride" to rowStride,
             "nv21" to getYV12(bitmap.width, bitmap.height, bitmap),
+            "time" to System.currentTimeMillis(),
+            "queue" to queue,
           )
         )
 
         val ts = System.currentTimeMillis() - start
-        Log.i(LOG_TAG, "n = \t${counting.addAndGet(1)}, ts = $ts\t, outputStream.size = ${outputStream.size()}")
+        Log.i(LOG_TAG, "n = \t${queue}, ts = $ts\t, outputStream.size = ${outputStream.size()}")
       }
     }, null)
 
@@ -310,6 +313,8 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
           "pixelStride" to pixelStride,
           "rowStride" to rowStride,
           "nv21" to getYV12(bitmap.width, bitmap.height, bitmap),
+          "time" to System.currentTimeMillis(),
+          "queue" to 1,
           // "base64" to b64,
         )
       )

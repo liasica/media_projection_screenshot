@@ -1,3 +1,7 @@
+## 0.0.6
+
+* Captured image add current time (millisecond) attribute and queue number (start from 1)
+
 ## 0.0.5
 
 * Return image nv21 format buffer

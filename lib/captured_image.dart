@@ -9,6 +9,8 @@ class CapturedImage {
   int pixelStride;
   int rowStride;
   String format;
+  int time;
+  int queue;
 
   CapturedImage({
     required this.bytes,
@@ -19,6 +21,8 @@ class CapturedImage {
     required this.pixelStride,
     required this.rowStride,
     required this.format,
+    required this.time,
+    required this.queue,
   });
 
   factory CapturedImage.fromMap(Map<String, dynamic> map) {
@@ -31,6 +35,8 @@ class CapturedImage {
       pixelStride: map['pixelStride'],
       rowStride: map['rowStride'],
       format: map['format'],
+      time: map['time'],
+      queue: map['queue'],
     );
   }
 
@@ -44,15 +50,17 @@ class CapturedImage {
       'format': format,
       'pixelStride': pixelStride,
       'rowStride': rowStride,
+      'time': time,
+      'queue': queue,
     };
   }
 
   @override
   String toString() =>
-      "ScreenshotImage(bytes: [${bytes.length} BYTES...], nv21: [${nv21.length} BYTES...], width: $width, height: $height, rowBytes: $rowBytes, format: $format, pixelStride: $pixelStride, rowStride: $rowStride)";
+      "ScreenshotImage(time: $time, queue: $queue, bytes: [${bytes.length} BYTES...], nv21: [${nv21.length} BYTES...], width: $width, height: $height, rowBytes: $rowBytes, format: $format, pixelStride: $pixelStride, rowStride: $rowStride)";
 
   @override
-  int get hashCode => Object.hash(bytes, nv21, width, height, rowBytes, format, pixelStride, rowStride);
+  int get hashCode => Object.hash(bytes, nv21, width, height, rowBytes, format, pixelStride, rowStride, time, queue);
 
   @override
   bool operator ==(Object other) =>
@@ -66,5 +74,7 @@ class CapturedImage {
           rowBytes == other.rowBytes &&
           format == other.format &&
           pixelStride == other.pixelStride &&
+          time == other.time &&
+          queue == other.queue &&
           rowStride == other.rowStride;
 }
