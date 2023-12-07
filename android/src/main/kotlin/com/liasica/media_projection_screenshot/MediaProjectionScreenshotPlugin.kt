@@ -50,8 +50,8 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
     const val LOG_TAG = "MP_SCREENSHOT"
     const val CAPTURE_SINGLE = "MP_CAPTURE_SINGLE"
     const val CAPTURE_CONTINUOUS = "MP_CAPTURE_CONTINUOUS"
-    const val METHOD_CHANNEL_NAME = "media_projection_screenshot"
-    const val EVENT_CHANNEL_NAME = "media_projection_screenshot/event"
+    const val METHOD_CHANNEL_NAME = "com.liasica.media_projection_screenshot/method"
+    const val EVENT_CHANNEL_NAME = "com.liasica.media_projection_screenshot/event"
     const val FPS = 15
   }
 
@@ -216,10 +216,26 @@ class MediaProjectionScreenshotPlugin : FlutterPlugin, MethodCallHandler, EventC
         // fOut.flush()
         // fOut.close()
 
+        val byteArray = outputStream.toByteArray()
+        events?.success(
+          mapOf(
+            "bytes" to byteArray,
+            "width" to bitmap.width,
+            "height" to bitmap.height,
+            "rowBytes" to bitmap.rowBytes,
+            "format" to Bitmap.Config.ARGB_8888.toString(),
+            "pixelStride" to pixelStride,
+            "rowStride" to rowStride,
+            "nv21" to getYV12(bitmap.width, bitmap.height, bitmap),
+          )
+        )
+
         val ts = System.currentTimeMillis() - start
         Log.i(LOG_TAG, "n = \t${counting.addAndGet(1)}, ts = $ts\t, outputStream.size = ${outputStream.size()}")
       }
     }, null)
+
+    result.success(true)
   }
 
   @SuppressLint("WrongConstant")

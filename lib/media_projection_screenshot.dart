@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:media_projection_creator/media_projection_creator.dart';
 import 'package:media_projection_screenshot/captured_image.dart';
 
@@ -7,6 +8,8 @@ class MediaProjectionScreenshot {
   // is permission granted
   static bool _isGranted = false;
   static bool get isGranted => _isGranted;
+
+  final _captureStream = const EventChannel('com.liasica.media_projection_screenshot/event').receiveBroadcastStream();
 
   /// request permission
   /// return [int] errorCode
@@ -40,11 +43,18 @@ class MediaProjectionScreenshot {
     return await MediaProjectionScreenshotPlatform.instance.takeCapture(x: x, y: y, width: width, height: height);
   }
 
-  Future<void> startCapture() async {
-    await MediaProjectionScreenshotPlatform.instance.startCapture();
+  Future<Stream<dynamic>?> startCapture({int? x, int? y, int? width, int? height, int fps = 15}) async {
+    try {
+      if (await MediaProjectionScreenshotPlatform.instance.startCapture(x: x, y: y, width: width, height: height, fps: fps)) {
+        return _captureStream;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
   }
 
-  Future<void> stopCapture() async {
-    await MediaProjectionScreenshotPlatform.instance.stopCapture();
+  Future<bool> stopCapture() async {
+    return await MediaProjectionScreenshotPlatform.instance.stopCapture();
   }
 }

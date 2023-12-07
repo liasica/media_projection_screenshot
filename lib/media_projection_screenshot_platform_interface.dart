@@ -28,11 +28,11 @@ abstract class MediaProjectionScreenshotPlatform extends PlatformInterface {
     throw UnimplementedError('takeCapture() has not been implemented.');
   }
 
-  Future<void> startCapture() {
-    throw UnimplementedError('takeCapture() has not been implemented.');
+  Future<bool> startCapture({int? x, int? y, int? width, int? height, int fps = 15}) {
+    throw UnimplementedError('startCapture() has not been implemented.');
   }
 
-  Future<void> stopCapture() {
-    throw UnimplementedError('takeCapture() has not been implemented.');
+  Future<bool> stopCapture() {
+    throw UnimplementedError('stopCapture() has not been implemented.');
   }
 }

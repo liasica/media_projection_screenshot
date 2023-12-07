@@ -52,7 +52,12 @@ class _MyAppState extends State<MyApp> {
               MaterialButton(
                 child: const Text('Start Capture'),
                 onPressed: () async {
-                  await _screenshotPlugin.startCapture();
+                  final stream = await _screenshotPlugin.startCapture(x: 0, y: 100, width: 800, height: 600);
+                  stream?.listen((result) {
+                    setState(() {
+                      image = CapturedImage.fromMap(Map<String, dynamic>.from(result));
+                    });
+                  });
                 },
               ),
               MaterialButton(

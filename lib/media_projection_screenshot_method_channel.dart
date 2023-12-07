@@ -8,7 +8,7 @@ import 'media_projection_screenshot_platform_interface.dart';
 class MethodChannelMediaProjectionScreenshot extends MediaProjectionScreenshotPlatform {
   /// The method channel used to interact with the native platform.
   @visibleForTesting
-  final methodChannel = const MethodChannel('media_projection_screenshot');
+  final methodChannel = const MethodChannel('com.liasica.media_projection_screenshot/method');
 
   @override
   Future<CapturedImage?> takeCapture({int? x, int? y, int? width, int? height}) async {
@@ -29,12 +29,21 @@ class MethodChannelMediaProjectionScreenshot extends MediaProjectionScreenshotPl
   }
 
   @override
-  Future<void> startCapture() async {
-    await methodChannel.invokeMethod('startCapture');
+  Future<bool> startCapture({int? x, int? y, int? width, int? height, int fps = 15}) async {
+    Map<String, dynamic>? data;
+    if (x != null && y != null && width != null && height != null) {
+      data = {
+        'x': x,
+        'y': y,
+        'width': width,
+        'height': height,
+      };
+    }
+    return await methodChannel.invokeMethod('startCapture', data);
   }
 
   @override
-  Future<void> stopCapture() async {
-    await methodChannel.invokeMethod('stopCapture');
+  Future<bool> stopCapture() async {
+    return await methodChannel.invokeMethod('stopCapture');
   }
 }

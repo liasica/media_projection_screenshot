@@ -1,6 +1,7 @@
 ## 0.0.5
 
 * Return image nv21 format buffer
+* Add `startCapture`, `stopCatpure` methods for capture screenshots without interruption
 
 ## 0.0.4
 
